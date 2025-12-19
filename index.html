@@ -1,87 +1,91 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok距離計算機（手動ボタン版）</title>
+    <title>TikTok距離計算機（詳細表示版）</title>
     <style>
         :root { --primary: #fe2c55; --bg: #0f0f0f; --card: #1c1c1e; --accent: #25f4ee; }
         body { font-family: sans-serif; background: var(--bg); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 480px; }
         
         /* メイン距離表示 */
-        .main-card { background: var(--card); border-radius: 24px; padding: 30px; text-align: center; border: 1px solid #333; margin-bottom: 15px; }
-        .dist-display { font-size: 4.5rem; font-weight: 900; color: var(--primary); margin: 10px 0; letter-spacing: -2px; }
-        .sub-info { color: #888; font-size: 0.9rem; }
+        .main-card { background: var(--card); border-radius: 24px; padding: 25px; text-align: center; border: 1px solid #333; margin-bottom: 15px; }
+        .dist-display { font-size: 3.5rem; font-weight: 900; color: var(--primary); margin: 5px 0; letter-spacing: -1px; line-height: 1.2; }
+        .dist-display span { font-size: 1.5rem; color: #fff; margin-left: 5px; margin-right: 10px; }
+        
+        /* 数値の直接編集エリア */
+        .edit-area { display: flex; gap: 5px; justify-content: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }
+        .edit-area input { width: 100px; text-align: center; background: #000; border: 1px solid var(--primary); color: #fff; border-radius: 8px; font-size: 1rem; padding: 5px; }
+        .btn-edit { background: var(--primary); color: #fff; border: none; padding: 5px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
 
-        /* 履歴操作ボタン */
-        .history-controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        /* 履歴・ギフトボタン */
+        .history-controls { display: flex; gap: 10px; margin-bottom: 15px; }
         .btn-hist { flex: 1; background: #3a3a3c; color: #fff; border: none; padding: 12px; border-radius: 12px; font-weight: bold; cursor: pointer; }
-        .btn-hist:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-hist:disabled { opacity: 0.2; }
 
-        /* ギフトボタンエリア */
         .gift-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .btn-gift { background: var(--accent); color: #000; border: none; padding: 20px 10px; border-radius: 16px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.1s; }
-        .btn-gift:active { transform: scale(0.95); opacity: 0.8; }
+        .btn-gift { background: var(--accent); color: #000; border: none; padding: 18px 10px; border-radius: 16px; font-weight: bold; font-size: 1rem; cursor: pointer; }
 
         /* 設定エリア */
         .card { background: var(--card); border-radius: 18px; padding: 20px; margin-bottom: 15px; border: 1px solid #333; }
         input, select { background: #2c2c2e; border: 1px solid #3d3d3f; color: #fff; padding: 12px; border-radius: 10px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
         .btn-add { background: #fff; color: #000; border: none; padding: 12px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; }
-        .gift-item { display: flex; justify-content: space-between; align-items: center; background: #2c2c2e; padding: 10px; border-radius: 10px; margin-top: 8px; font-size: 0.9rem; }
-        .btn-del { background: #ff3b30; color: #fff; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
+        .gift-item { display: flex; justify-content: space-between; align-items: center; background: #2c2c2e; padding: 10px; border-radius: 10px; margin-top: 8px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="main-card">
-        <div style="font-size: 0.9rem; color: #888;">現在の合計距離</div>
-        <div class="dist-display" id="totalDist">0m</div>
-        <div class="sub-info">累計: <span id="totalM">0</span>m</div>
+        <div style="font-size: 0.8rem; color: #888; margin-bottom: 5px;">現在の距離</div>
+        <div class="dist-display" id="totalDist">0<span>km</span>0<span>m</span></div>
+        
+        <div class="edit-area">
+            <input type="number" id="editMeters" placeholder="数値を変更">
+            <button class="btn-edit" onclick="manualSetDistance()">数値を確定</button>
+        </div>
     </div>
 
     <div class="history-controls">
-        <button class="btn-hist" id="btnUndo" onclick="undo()">◀ 1つ戻る</button>
-        <button class="btn-hist" id="btnRedo" onclick="redo()">1つ進む ▶</button>
+        <button class="btn-hist" id="btnUndo" onclick="undo()">◀ 戻る</button>
+        <button class="btn-hist" id="btnRedo" onclick="redo()">進む ▶</button>
     </div>
 
-    <div class="gift-buttons" id="giftButtonContainer">
-        </div>
+    <div class="gift-buttons" id="giftButtonContainer"></div>
 
     <div class="card">
-        <strong style="display:block; margin-bottom:12px;">🎁 ギフトボタンの登録</strong>
+        <strong style="display:block; margin-bottom:12px;">🎁 ボタン設定</strong>
         <div style="display:flex; gap:8px; margin-bottom:10px;">
             <input type="text" id="gName" placeholder="バラ" style="flex:2; margin:0">
             <input type="number" id="gVal" placeholder="10" style="flex:1; margin:0">
             <select id="gUnit" style="flex:1; margin:0"><option value="1">m</option><option value="1000">km</option></select>
         </div>
-        <button class="btn-add" onclick="addGiftSetting()">ボタンを追加する</button>
-        
-        <div id="giftList" style="margin-top:15px;"></div>
+        <button class="btn-add" onclick="addGiftSetting()">ボタンを追加</button>
+        <div id="giftList" style="margin-top:10px;"></div>
     </div>
 
-    <button onclick="hardReset()" style="background:none; border:none; color:#444; text-decoration:underline; width:100%; padding:10px; cursor:pointer;">距離を0にリセット</button>
+    <button onclick="hardReset()" style="background:none; border:none; color:#444; text-decoration:underline; width:100%; padding:10px; cursor:pointer;">全リセット</button>
 </div>
 
 <script>
-    // 状態管理
-    let currentDistance = parseFloat(localStorage.getItem('manual_dist')) || 0;
-    let giftSettings = JSON.parse(localStorage.getItem('manual_settings')) || [
+    let currentMeters = parseFloat(localStorage.getItem('v6_dist')) || 0;
+    let giftSettings = JSON.parse(localStorage.getItem('v6_settings')) || [
         { name: "バラ", val: 10, mult: 1 },
         { name: "指ハート", val: 50, mult: 1 }
     ];
-    let history = JSON.parse(localStorage.getItem('manual_history')) || [currentDistance];
-    let historyStep = history.length - 1;
+    let history = [currentMeters];
+    let historyStep = 0;
 
-    // 画面更新
     function updateUI() {
-        // 距離表示
-        const isKm = Math.abs(currentDistance) >= 1000;
-        document.getElementById('totalDist').innerText = isKm ? (currentDistance/1000).toFixed(2) + "km" : Math.round(currentDistance) + "m";
-        document.getElementById('totalM').innerText = Math.round(currentDistance).toLocaleString();
+        // 〇km 〇m 表示への変換
+        const km = Math.floor(Math.abs(currentMeters) / 1000);
+        const m = Math.floor(Math.abs(currentMeters) % 1000);
+        const sign = currentMeters < 0 ? "-" : "";
+        document.getElementById('totalDist').innerHTML = `${sign}${km}<span>km</span>${m}<span>m</span>`;
 
-        // 履歴ボタンの状態
+        // 履歴ボタン
         document.getElementById('btnUndo').disabled = (historyStep <= 0);
         document.getElementById('btnRedo').disabled = (historyStep >= history.length - 1);
 
@@ -91,89 +95,64 @@
         giftSettings.forEach(g => {
             const btn = document.createElement('button');
             btn.className = 'btn-gift';
-            const sign = g.val >= 0 ? "+" : "";
-            const unit = g.mult === 1000 ? "km" : "m";
-            btn.innerText = `${g.name}\n(${sign}${g.val}${unit})`;
-            btn.onclick = () => addDistance(g.val * g.mult);
+            btn.innerText = `${g.name}\n(${g.val >= 0 ? "+" : ""}${g.val}${g.mult === 1000 ? "km" : "m"})`;
+            btn.onclick = () => changeDistance(g.val * g.mult);
             btnContainer.appendChild(btn);
         });
 
-        // 設定リスト表示
+        // リスト表示
         const list = document.getElementById('giftList');
         list.innerHTML = "";
         giftSettings.forEach((g, i) => {
             list.innerHTML += `<div class="gift-item">
                 <span>${g.name} (${g.val}${g.mult==1000?'km':'m'})</span>
-                <button class="btn-del" onclick="deleteGift(${i})">削除</button>
+                <button onclick="deleteGift(${i})" style="background:#ff3b30; color:#fff; border:none; border-radius:5px; padding:3px 8px;">削除</button>
             </div>`;
         });
 
-        // ローカルストレージに保存
-        localStorage.setItem('manual_dist', currentDistance);
-        localStorage.setItem('manual_settings', JSON.stringify(giftSettings));
-        localStorage.setItem('manual_history', JSON.stringify(history));
+        localStorage.setItem('v6_dist', currentMeters);
+        localStorage.setItem('v6_settings', JSON.stringify(giftSettings));
     }
 
-    // 距離加算
-    function addDistance(amount) {
-        currentDistance += amount;
-        // 新しい操作があったら、現在のステップより先の履歴は削除して追加
+    // 距離の増減
+    function changeDistance(amount) {
+        currentMeters += amount;
+        saveHistory();
+        updateUI();
+    }
+
+    // 数値の直接編集
+    function manualSetDistance() {
+        const input = document.getElementById('editMeters');
+        const val = parseFloat(input.value);
+        if (!isNaN(val)) {
+            currentMeters = val;
+            saveHistory();
+            updateUI();
+            input.value = "";
+        }
+    }
+
+    // 履歴保存
+    function saveHistory() {
         history = history.slice(0, historyStep + 1);
-        history.push(currentDistance);
-        // 履歴が長すぎないように（直近50件）
+        history.push(currentMeters);
         if (history.length > 50) history.shift();
         historyStep = history.length - 1;
-        updateUI();
     }
 
-    // 戻る
-    function undo() {
-        if (historyStep > 0) {
-            historyStep--;
-            currentDistance = history[historyStep];
-            updateUI();
-        }
-    }
+    function undo() { if (historyStep > 0) { historyStep--; currentMeters = history[historyStep]; updateUI(); } }
+    function redo() { if (historyStep < history.length - 1) { historyStep++; currentMeters = history[historyStep]; updateUI(); } }
 
-    // 進む
-    function redo() {
-        if (historyStep < history.length - 1) {
-            historyStep++;
-            currentDistance = history[historyStep];
-            updateUI();
-        }
-    }
-
-    // 設定追加
     function addGiftSetting() {
-        const name = document.getElementById('gName').value.trim();
-        const val = parseFloat(document.getElementById('gVal').value);
-        const mult = parseInt(document.getElementById('gUnit').value);
-        if (name && !isNaN(val)) {
-            giftSettings.push({ name, val, mult });
-            updateUI();
-            document.getElementById('gName').value = "";
-            document.getElementById('gVal').value = "";
-        }
+        const n = document.getElementById('gName').value;
+        const v = parseFloat(document.getElementById('gVal').value);
+        const m = parseInt(document.getElementById('gUnit').value);
+        if (n && !isNaN(v)) { giftSettings.push({ name: n, val: v, mult: m }); updateUI(); }
     }
+    function deleteGift(i) { giftSettings.splice(i, 1); updateUI(); }
+    function hardReset() { if (confirm("0に戻しますか？")) { currentMeters = 0; history = [0]; historyStep = 0; updateUI(); } }
 
-    // 削除
-    function deleteGift(i) {
-        giftSettings.splice(i, 1);
-        updateUI();
-    }
-
-    // リセット
-    function hardReset() {
-        if (confirm("距離を0に戻しますか？（ギフト設定は消えません）")) {
-            currentDistance = 0;
-            history = [0];
-            historyStep = 0;
-            updateUI();
-        }
-    }
-
-    // 初期化
     updateUI();
 </script>
 </body>
