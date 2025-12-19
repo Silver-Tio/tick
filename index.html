@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok距離計算機（詳細表示版）</title>
+    <title>TikTok歩数計算機</title>
     <style>
         :root { --primary: #fe2c55; --bg: #0f0f0f; --card: #1c1c1e; --accent: #25f4ee; }
         body { font-family: sans-serif; background: var(--bg); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 480px; }
         
-        /* メイン距離表示 */
+        /* メイン歩数表示 */
         .main-card { background: var(--card); border-radius: 24px; padding: 25px; text-align: center; border: 1px solid #333; margin-bottom: 15px; }
         .dist-display { font-size: 3.5rem; font-weight: 900; color: var(--primary); margin: 5px 0; letter-spacing: -1px; line-height: 1.2; }
         .dist-display span { font-size: 1.5rem; color: #fff; margin-left: 5px; margin-right: 10px; }
@@ -39,12 +39,12 @@
 
 <div class="container">
     <div class="main-card">
-        <div style="font-size: 0.8rem; color: #888; margin-bottom: 5px;">現在の距離</div>
-        <div class="dist-display" id="totalDist">0<span>km</span>0<span>m</span></div>
+        <div style="font-size: 0.8rem; color: #888; margin-bottom: 5px;">現在の歩数</div>
+        <div class="dist-display" id="totalDist">0<span>km</span>0<span>歩</span></div>
         
         <div class="edit-area">
-            <input type="number" id="editMeters" placeholder="数値を変更">
-            <button class="btn-edit" onclick="manualSetDistance()">数値を確定</button>
+            <input type="number" id="editSteps" placeholder="歩数を変更">
+            <button class="btn-edit" onclick="manualSetSteps()">数値を確定</button>
         </div>
     </div>
 
@@ -60,7 +60,7 @@
         <div style="display:flex; gap:8px; margin-bottom:10px;">
             <input type="text" id="gName" placeholder="バラ" style="flex:2; margin:0">
             <input type="number" id="gVal" placeholder="10" style="flex:1; margin:0">
-            <select id="gUnit" style="flex:1; margin:0"><option value="1">m</option><option value="1000">km</option></select>
+            <select id="gUnit" style="flex:1; margin:0"><option value="1">歩</option><option value="1000">km(1000歩)</option></select>
         </div>
         <button class="btn-add" onclick="addGiftSetting()">ボタンを追加</button>
         <div id="giftList" style="margin-top:10px;"></div>
@@ -70,79 +70,73 @@
 </div>
 
 <script>
-    let currentMeters = parseFloat(localStorage.getItem('v6_dist')) || 0;
-    let giftSettings = JSON.parse(localStorage.getItem('v6_settings')) || [
+    let currentSteps = parseFloat(localStorage.getItem('v7_steps')) || 0;
+    let giftSettings = JSON.parse(localStorage.getItem('v7_settings')) || [
         { name: "バラ", val: 10, mult: 1 },
         { name: "指ハート", val: 50, mult: 1 }
     ];
-    let history = [currentMeters];
+    let history = [currentSteps];
     let historyStep = 0;
 
     function updateUI() {
-        // 〇km 〇m 表示への変換
-        const km = Math.floor(Math.abs(currentMeters) / 1000);
-        const m = Math.floor(Math.abs(currentMeters) % 1000);
-        const sign = currentMeters < 0 ? "-" : "";
-        document.getElementById('totalDist').innerHTML = `${sign}${km}<span>km</span>${m}<span>m</span>`;
+        // 〇km 〇歩 表示への変換
+        const km = Math.floor(Math.abs(currentSteps) / 1000);
+        const steps = Math.floor(Math.abs(currentSteps) % 1000);
+        const sign = currentSteps < 0 ? "-" : "";
+        document.getElementById('totalDist').innerHTML = `${sign}${km}<span>km</span>${steps}<span>歩</span>`;
 
-        // 履歴ボタン
         document.getElementById('btnUndo').disabled = (historyStep <= 0);
         document.getElementById('btnRedo').disabled = (historyStep >= history.length - 1);
 
-        // ギフトボタン生成
         const btnContainer = document.getElementById('giftButtonContainer');
         btnContainer.innerHTML = "";
         giftSettings.forEach(g => {
             const btn = document.createElement('button');
             btn.className = 'btn-gift';
-            btn.innerText = `${g.name}\n(${g.val >= 0 ? "+" : ""}${g.val}${g.mult === 1000 ? "km" : "m"})`;
-            btn.onclick = () => changeDistance(g.val * g.mult);
+            btn.innerText = `${g.name}\n(${g.val >= 0 ? "+" : ""}${g.val}${g.mult === 1000 ? "km" : "歩"})`;
+            btn.onclick = () => changeSteps(g.val * g.mult);
             btnContainer.appendChild(btn);
         });
 
-        // リスト表示
         const list = document.getElementById('giftList');
         list.innerHTML = "";
         giftSettings.forEach((g, i) => {
             list.innerHTML += `<div class="gift-item">
-                <span>${g.name} (${g.val}${g.mult==1000?'km':'m'})</span>
+                <span>${g.name} (${g.val}${g.mult==1000?'km':'歩'})</span>
                 <button onclick="deleteGift(${i})" style="background:#ff3b30; color:#fff; border:none; border-radius:5px; padding:3px 8px;">削除</button>
             </div>`;
         });
 
-        localStorage.setItem('v6_dist', currentMeters);
-        localStorage.setItem('v6_settings', JSON.stringify(giftSettings));
+        localStorage.setItem('v7_steps', currentSteps);
+        localStorage.setItem('v7_settings', JSON.stringify(giftSettings));
     }
 
-    // 距離の増減
-    function changeDistance(amount) {
-        currentMeters += amount;
+    function changeSteps(amount) {
+        currentSteps += amount;
         saveHistory();
         updateUI();
     }
 
-    // 数値の直接編集
-    function manualSetDistance() {
-        const input = document.getElementById('editMeters');
+    function manualSetSteps() {
+        const input = document.getElementById('editSteps');
         const val = parseFloat(input.value);
         if (!isNaN(val)) {
-            currentMeters = val;
+            currentSteps = val;
             saveHistory();
             updateUI();
             input.value = "";
         }
     }
 
-    // 履歴保存
     function saveHistory() {
         history = history.slice(0, historyStep + 1);
-        history.push(currentMeters);
+        history.push(currentSteps);
         if (history.length > 50) history.shift();
         historyStep = history.length - 1;
     }
 
-    function undo() { if (historyStep > 0) { historyStep--; currentMeters = history[historyStep]; updateUI(); } }
-    function redo() { if (historyStep < history.length - 1) { historyStep++; currentMeters = history[historyStep]; updateUI(); } }
+    function undo() { if (historyStep > 0) { historyStep--; currentSteps = history[historyStep]; updateUI(); } }
+    function redo() { if (historyStep < history.length - 1) { historyStep++; currentSteps = history[historyStep]; updateUI(); } }
 
     function addGiftSetting() {
         const n = document.getElementById('gName').value;
@@ -151,7 +145,7 @@
         if (n && !isNaN(v)) { giftSettings.push({ name: n, val: v, mult: m }); updateUI(); }
     }
     function deleteGift(i) { giftSettings.splice(i, 1); updateUI(); }
-    function hardReset() { if (confirm("0に戻しますか？")) { currentMeters = 0; history = [0]; historyStep = 0; updateUI(); } }
+    function hardReset() { if (confirm("0に戻しますか？")) { currentSteps = 0; history = [0]; historyStep = 0; updateUI(); } }
 
     updateUI();
 </script>
