@@ -1,24 +1,24 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok歩数計算機</title>
+    <title>TikTok 距離・歩数管理</title>
     <style>
         :root { --primary: #fe2c55; --bg: #0f0f0f; --card: #1c1c1e; --accent: #25f4ee; }
         body { font-family: sans-serif; background: var(--bg); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 480px; }
         
-        /* メイン歩数表示 */
+        /* メイン表示 */
         .main-card { background: var(--card); border-radius: 24px; padding: 25px; text-align: center; border: 1px solid #333; margin-bottom: 15px; }
-        .dist-display { font-size: 3.5rem; font-weight: 900; color: var(--primary); margin: 5px 0; letter-spacing: -1px; line-height: 1.2; }
+        .dist-display { font-size: 3.2rem; font-weight: 900; color: var(--primary); margin: 5px 0; letter-spacing: -1px; }
         .dist-display span { font-size: 1.5rem; color: #fff; margin-left: 5px; margin-right: 10px; }
         
-        /* 数値の直接編集エリア */
-        .edit-area { display: flex; gap: 5px; justify-content: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }
-        .edit-area input { width: 100px; text-align: center; background: #000; border: 1px solid var(--primary); color: #fff; border-radius: 8px; font-size: 1rem; padding: 5px; }
-        .btn-edit { background: var(--primary); color: #fff; border: none; padding: 5px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        /* 個別入力エリア */
+        .edit-group { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }
+        .edit-row { display: flex; gap: 8px; align-items: center; justify-content: center; }
+        .edit-row input { width: 80px; text-align: center; background: #000; border: 1px solid #444; color: #fff; border-radius: 8px; padding: 8px; font-size: 1rem; }
+        .btn-set { background: var(--primary); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: bold; }
 
         /* 履歴・ギフトボタン */
         .history-controls { display: flex; gap: 10px; margin-bottom: 15px; }
@@ -39,12 +39,18 @@
 
 <div class="container">
     <div class="main-card">
-        <div style="font-size: 0.8rem; color: #888; margin-bottom: 5px;">現在の歩数</div>
-        <div class="dist-display" id="totalDist">0<span>km</span>0<span>歩</span></div>
+        <div style="font-size: 0.8rem; color: #888; margin-bottom: 5px;">現在のステータス</div>
+        <div class="dist-display"><span id="dispKm">0</span><span>km</span><span id="dispSteps">0</span><span>歩</span></div>
         
-        <div class="edit-area">
-            <input type="number" id="editSteps" placeholder="歩数を変更">
-            <button class="btn-edit" onclick="manualSetSteps()">数値を確定</button>
+        <div class="edit-group">
+            <div class="edit-row">
+                <input type="number" id="inputKm" placeholder="0"> <span>km</span>
+                <button class="btn-set" onclick="setKm()">kmを確定</button>
+            </div>
+            <div class="edit-row">
+                <input type="number" id="inputSteps" placeholder="0"> <span>歩</span>
+                <button class="btn-set" onclick="setSteps()">歩数を確定</button>
+            </div>
         </div>
     </div>
 
@@ -56,11 +62,11 @@
     <div class="gift-buttons" id="giftButtonContainer"></div>
 
     <div class="card">
-        <strong style="display:block; margin-bottom:12px;">🎁 ボタン設定</strong>
+        <strong style="display:block; margin-bottom:12px;">🎁 ギフトボタン登録</strong>
         <div style="display:flex; gap:8px; margin-bottom:10px;">
             <input type="text" id="gName" placeholder="バラ" style="flex:2; margin:0">
             <input type="number" id="gVal" placeholder="10" style="flex:1; margin:0">
-            <select id="gUnit" style="flex:1; margin:0"><option value="1">歩</option><option value="1000">km(1000歩)</option></select>
+            <select id="gUnit" style="flex:1; margin:0"><option value="steps">歩</option><option value="km">km</option></select>
         </div>
         <button class="btn-add" onclick="addGiftSetting()">ボタンを追加</button>
         <div id="giftList" style="margin-top:10px;"></div>
@@ -70,20 +76,18 @@
 </div>
 
 <script>
-    let currentSteps = parseFloat(localStorage.getItem('v7_steps')) || 0;
-    let giftSettings = JSON.parse(localStorage.getItem('v7_settings')) || [
-        { name: "バラ", val: 10, mult: 1 },
-        { name: "指ハート", val: 50, mult: 1 }
+    // 状態管理（kmと歩を完全に分ける）
+    let state = JSON.parse(localStorage.getItem('v8_state')) || { km: 0, steps: 0 };
+    let giftSettings = JSON.parse(localStorage.getItem('v8_settings')) || [
+        { name: "バラ", val: 10, type: "steps" },
+        { name: "ハート", val: 1, type: "km" }
     ];
-    let history = [currentSteps];
+    let history = [JSON.stringify(state)];
     let historyStep = 0;
 
     function updateUI() {
-        // 〇km 〇歩 表示への変換
-        const km = Math.floor(Math.abs(currentSteps) / 1000);
-        const steps = Math.floor(Math.abs(currentSteps) % 1000);
-        const sign = currentSteps < 0 ? "-" : "";
-        document.getElementById('totalDist').innerHTML = `${sign}${km}<span>km</span>${steps}<span>歩</span>`;
+        document.getElementById('dispKm').innerText = state.km;
+        document.getElementById('dispSteps').innerText = state.steps;
 
         document.getElementById('btnUndo').disabled = (historyStep <= 0);
         document.getElementById('btnRedo').disabled = (historyStep >= history.length - 1);
@@ -93,8 +97,9 @@
         giftSettings.forEach(g => {
             const btn = document.createElement('button');
             btn.className = 'btn-gift';
-            btn.innerText = `${g.name}\n(${g.val >= 0 ? "+" : ""}${g.val}${g.mult === 1000 ? "km" : "歩"})`;
-            btn.onclick = () => changeSteps(g.val * g.mult);
+            const unitText = g.type === "km" ? "km" : "歩";
+            btn.innerText = `${g.name}\n(${g.val >= 0 ? "+" : ""}${g.val}${unitText})`;
+            btn.onclick = () => changeValue(g.type, g.val);
             btnContainer.appendChild(btn);
         });
 
@@ -102,50 +107,63 @@
         list.innerHTML = "";
         giftSettings.forEach((g, i) => {
             list.innerHTML += `<div class="gift-item">
-                <span>${g.name} (${g.val}${g.mult==1000?'km':'歩'})</span>
+                <span>${g.name} (${g.val}${g.type === "km" ? 'km' : '歩'})</span>
                 <button onclick="deleteGift(${i})" style="background:#ff3b30; color:#fff; border:none; border-radius:5px; padding:3px 8px;">削除</button>
             </div>`;
         });
 
-        localStorage.setItem('v7_steps', currentSteps);
-        localStorage.setItem('v7_settings', JSON.stringify(giftSettings));
+        localStorage.setItem('v8_state', JSON.stringify(state));
+        localStorage.setItem('v8_settings', JSON.stringify(giftSettings));
     }
 
-    function changeSteps(amount) {
-        currentSteps += amount;
+    function changeValue(type, val) {
+        state[type] += val;
         saveHistory();
         updateUI();
     }
 
-    function manualSetSteps() {
-        const input = document.getElementById('editSteps');
-        const val = parseFloat(input.value);
-        if (!isNaN(val)) {
-            currentSteps = val;
-            saveHistory();
-            updateUI();
-            input.value = "";
-        }
+    function setKm() {
+        const val = parseFloat(document.getElementById('inputKm').value);
+        if (!isNaN(val)) { state.km = val; saveHistory(); updateUI(); document.getElementById('inputKm').value = ""; }
+    }
+
+    function setSteps() {
+        const val = parseFloat(document.getElementById('inputSteps').value);
+        if (!isNaN(val)) { state.steps = val; saveHistory(); updateUI(); document.getElementById('inputSteps').value = ""; }
     }
 
     function saveHistory() {
         history = history.slice(0, historyStep + 1);
-        history.push(currentSteps);
+        history.push(JSON.stringify(state));
         if (history.length > 50) history.shift();
         historyStep = history.length - 1;
     }
 
-    function undo() { if (historyStep > 0) { historyStep--; currentSteps = history[historyStep]; updateUI(); } }
-    function redo() { if (historyStep < history.length - 1) { historyStep++; currentSteps = history[historyStep]; updateUI(); } }
+    function undo() {
+        if (historyStep > 0) { historyStep--; state = JSON.parse(history[historyStep]); updateUI(); }
+    }
+
+    function redo() {
+        if (historyStep < history.length - 1) { historyStep++; state = JSON.parse(history[historyStep]); updateUI(); }
+    }
 
     function addGiftSetting() {
         const n = document.getElementById('gName').value;
         const v = parseFloat(document.getElementById('gVal').value);
-        const m = parseInt(document.getElementById('gUnit').value);
-        if (n && !isNaN(v)) { giftSettings.push({ name: n, val: v, mult: m }); updateUI(); }
+        const t = document.getElementById('gUnit').value;
+        if (n && !isNaN(v)) { giftSettings.push({ name: n, val: v, type: t }); updateUI(); }
     }
+
     function deleteGift(i) { giftSettings.splice(i, 1); updateUI(); }
-    function hardReset() { if (confirm("0に戻しますか？")) { currentSteps = 0; history = [0]; historyStep = 0; updateUI(); } }
+
+    function hardReset() {
+        if (confirm("すべて0に戻しますか？")) {
+            state = { km: 0, steps: 0 };
+            history = [JSON.stringify(state)];
+            historyStep = 0;
+            updateUI();
+        }
+    }
 
     updateUI();
 </script>
