@@ -3,299 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok自動距離計算機Pro - 完全版</title>
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.4/dist/socket.io.min.js"></script>
-    <script src="https://unpkg.com/bubbles-tiktok-connector@1.0.0/dist/bubbles-tiktok-connector.min.js"></script>
+    <title>TikTok距離計算機（手動ボタン版）</title>
     <style>
-        :root { --primary: #fe2c55; --online: #25f4ee; --offline: #555; --bg: #0f0f0f; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; margin: 0; }
-        .container { width: 100%; max-width: 450px; }
+        :root { --primary: #fe2c55; --bg: #0f0f0f; --card: #1c1c1e; --accent: #25f4ee; }
+        body { font-family: sans-serif; background: var(--bg); color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 480px; }
         
-        /* メインステータス表示 */
-        .status-card { background: #1a1a1a; border-radius: 20px; padding: 25px; text-align: center; border: 2px solid var(--offline); transition: 0.4s; margin-bottom: 15px; position: relative; overflow: hidden; }
-        .status-card.active { border-color: var(--online); box-shadow: 0 0 25px rgba(37, 244, 238, 0.2); }
-        
-        /* 接続中ランプ */
-        .indicator { width: 12px; height: 12px; background: var(--offline); border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .active .indicator { background: var(--online); box-shadow: 0 0 10px var(--online); animation: blink 1.5s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        /* メイン距離表示 */
+        .main-card { background: var(--card); border-radius: 24px; padding: 30px; text-align: center; border: 1px solid #333; margin-bottom: 15px; }
+        .dist-display { font-size: 4.5rem; font-weight: 900; color: var(--primary); margin: 10px 0; letter-spacing: -2px; }
+        .sub-info { color: #888; font-size: 0.9rem; }
 
-        .status-text { font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; }
-        .dist-display { font-size: 4rem; font-weight: bold; color: var(--primary); margin: 10px 0; letter-spacing: -2px; }
-        
-        /* カードデザイン */
-        .card { background: #222; border-radius: 15px; padding: 20px; margin-bottom: 15px; border: 1px solid #333; }
-        input, select { background: #333; border: 1px solid #444; color: white; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 1rem; margin-bottom: 10px; }
-        .btn { cursor: pointer; border: none; border-radius: 8px; padding: 15px; font-weight: bold; width: 100%; transition: 0.2s; font-size: 1.1rem; }
-        .btn-connect { background: var(--primary); color: white; }
-        .btn-disconnect { background: #444; color: white; display: none; }
-        
-        /* ギフトリスト */
-        .gift-item { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 12px; border-radius: 10px; margin-bottom: 8px; border-left: 5px solid var(--online); }
-        .log-area { background: #000; padding: 10px; border-radius: 8px; font-size: 0.8rem; color: #888; height: 60px; overflow-y: auto; margin-top: 10px; border: 1px solid #222; }
-        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+        /* 履歴操作ボタン */
+        .history-controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        .btn-hist { flex: 1; background: #3a3a3c; color: #fff; border: none; padding: 12px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .btn-hist:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* ギフトボタンエリア */
+        .gift-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .btn-gift { background: var(--accent); color: #000; border: none; padding: 20px 10px; border-radius: 16px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: 0.1s; }
+        .btn-gift:active { transform: scale(0.95); opacity: 0.8; }
+
+        /* 設定エリア */
+        .card { background: var(--card); border-radius: 18px; padding: 20px; margin-bottom: 15px; border: 1px solid #333; }
+        input, select { background: #2c2c2e; border: 1px solid #3d3d3f; color: #fff; padding: 12px; border-radius: 10px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        .btn-add { background: #fff; color: #000; border: none; padding: 12px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; }
+        .gift-item { display: flex; justify-content: space-between; align-items: center; background: #2c2c2e; padding: 10px; border-radius: 10px; margin-top: 8px; font-size: 0.9rem; }
+        .btn-del { background: #ff3b30; color: #fff; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="status-card" id="mainCard">
-        <div class="status-text"><span class="indicator"></span><span id="statusTxt">オフライン</span></div>
-        <div id="targetUser" style="color:#666; font-size: 0.9rem;">接続先: 未指定</div>
-        <div class="dist-display" id="totalDist">0 m</div>
-        <div style="color: #888; font-size: 0.9rem;">累計歩行距離: <span id="totalM">0</span>m</div>
+    <div class="main-card">
+        <div style="font-size: 0.9rem; color: #888;">現在の合計距離</div>
+        <div class="dist-display" id="totalDist">0m</div>
+        <div class="sub-info">累計: <span id="totalM">0</span>m</div>
     </div>
 
-    <div class="card">
-        <input type="text" id="tiktokId" placeholder="TikTok ID (@なし)">
-        <button class="btn btn-connect" id="btnConnect" onclick="connectTikTok()">ライブ監視を開始</button>
-        <button class="btn btn-disconnect" id="btnDisconnect" onclick="disconnectTikTok()">接続を解除</button>
-        <div class="log-area" id="log">ログ: IDを入力して開始してください</div>
+    <div class="history-controls">
+        <button class="btn-hist" id="btnUndo" onclick="undo()">◀ 1つ戻る</button>
+        <button class="btn-hist" id="btnRedo" onclick="redo()">1つ進む ▶</button>
     </div>
 
-    <div class="card">
-        <strong style="display:block; margin-bottom:12px; font-size: 1rem;">🎁 ギフト判定の追加</strong>
-        <div style="display:flex; gap:8px;">
-            <input type="text" id="newName" placeholder="ギフト名" style="flex:2">
-            <input type="number" id="newVal" placeholder="数値" style="flex:1">
-            <select id="newUnit" style="flex:1">
-                <option value="1">m</option>
-                <option value="1000">km</option>
-            </select>
+    <div class="gift-buttons" id="giftButtonContainer">
         </div>
-        <button class="btn" style="background:var(--online); color:#000; padding: 10px;" onclick="saveSetting()">設定を保存</button>
+
+    <div class="card">
+        <strong style="display:block; margin-bottom:12px;">🎁 ギフトボタンの登録</strong>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+            <input type="text" id="gName" placeholder="バラ" style="flex:2; margin:0">
+            <input type="number" id="gVal" placeholder="10" style="flex:1; margin:0">
+            <select id="gUnit" style="flex:1; margin:0"><option value="1">m</option><option value="1000">km</option></select>
+        </div>
+        <button class="btn-add" onclick="addGiftSetting()">ボタンを追加する</button>
         
-        <div id="giftListDisplay" style="margin-top:20px;">
-            </div>
+        <div id="giftList" style="margin-top:15px;"></div>
     </div>
 
-    <button onclick="resetData()" style="background:none; border:none; color:#555; text-decoration:underline; width:100%; padding: 20px; cursor: pointer;">すべての計測データをリセット</button>
+    <button onclick="hardReset()" style="background:none; border:none; color:#444; text-decoration:underline; width:100%; padding:10px; cursor:pointer;">距離を0にリセット</button>
 </div>
 
 <script>
-    // ブラウザ保存データの読み込み
-    let giftSettings = JSON.parse(localStorage.getItem('tk_v3_settings')) || [
+    // 状態管理
+    let currentDistance = parseFloat(localStorage.getItem('manual_dist')) || 0;
+    let giftSettings = JSON.parse(localStorage.getItem('manual_settings')) || [
         { name: "バラ", val: 10, mult: 1 },
         { name: "指ハート", val: 50, mult: 1 }
     ];
-    let totalMeters = parseFloat(localStorage.getItem('tk_v3_total')) || 0;
-    let connection = null;
+    let history = JSON.parse(localStorage.getItem('manual_history')) || [currentDistance];
+    let historyStep = history.length - 1;
 
-    // 画面の更新処理
+    // 画面更新
     function updateUI() {
-        const absM = Math.abs(totalMeters);
-        const displayStr = absM >= 1000 ? (totalMeters/1000).toFixed(2) + " km" : Math.round(totalMeters) + " m";
-        document.getElementById('totalDist').innerText = displayStr;
-        document.getElementById('totalM').innerText = Math.round(totalMeters).toLocaleString();
-        
-        const listDiv = document.getElementById('giftListDisplay');
-        listDiv.innerHTML = giftSettings.length ? "" : "<p style='color:#555; text-align:center;'>設定されたギフトはありません</p>";
-        
+        // 距離表示
+        const isKm = Math.abs(currentDistance) >= 1000;
+        document.getElementById('totalDist').innerText = isKm ? (currentDistance/1000).toFixed(2) + "km" : Math.round(currentDistance) + "m";
+        document.getElementById('totalM').innerText = Math.round(currentDistance).toLocaleString();
+
+        // 履歴ボタンの状態
+        document.getElementById('btnUndo').disabled = (historyStep <= 0);
+        document.getElementById('btnRedo').disabled = (historyStep >= history.length - 1);
+
+        // ギフトボタン生成
+        const btnContainer = document.getElementById('giftButtonContainer');
+        btnContainer.innerHTML = "";
+        giftSettings.forEach(g => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-gift';
+            const sign = g.val >= 0 ? "+" : "";
+            const unit = g.mult === 1000 ? "km" : "m";
+            btn.innerText = `${g.name}\n(${sign}${g.val}${unit})`;
+            btn.onclick = () => addDistance(g.val * g.mult);
+            btnContainer.appendChild(btn);
+        });
+
+        // 設定リスト表示
+        const list = document.getElementById('giftList');
+        list.innerHTML = "";
         giftSettings.forEach((g, i) => {
-            const unitText = g.mult == 1000 ? "km" : "m";
-            const valText = g.val > 0 ? "+" + g.val : g.val;
-            listDiv.innerHTML += `
-                <div class="gift-item">
-                    <span><strong>${g.name}</strong> (${valText}${unitText})</span>
-                    <button class="delete-btn" onclick="deleteSetting(${i})">削除</button>
-                </div>`;
-        });
-
-        localStorage.setItem('tk_v3_settings', JSON.stringify(giftSettings));
-        localStorage.setItem('tk_v3_total', totalMeters);
-    }
-
-    // TikTok LIVE 接続処理
-    function connectTikTok() {
-        const user = document.getElementById('tiktokId').value.trim().replace('@', '');
-        if(!user) { alert("IDを入力してください（例: tukit0805）"); return; }
-
-        const card = document.getElementById('mainCard');
-        const statusTxt = document.getElementById('statusTxt');
-        const log = document.getElementById('log');
-
-        statusTxt.innerText = "接続中...";
-        log.innerText = `@${user} のライブを探しています...`;
-
-        // ライブラリのインスタンス作成
-        connection = new TikTokLiveConnector.TikTokLiveConnection(user);
-
-        connection.connect().then(() => {
-            card.classList.add('active');
-            statusTxt.innerText = "LIVE監視中";
-            document.getElementById('targetUser').innerText = "接続先: @" + user;
-            document.getElementById('btnConnect').style.display = "none";
-            document.getElementById('btnDisconnect').style.display = "block";
-            log.innerText = "接続成功！ギフトが投げられるのを待っています...";
-        }).catch(err => {
-            console.error(err);
-            statusTxt.innerText = "接続失敗";
-            log.innerText = "接続に失敗しました。配信中であることを確認してください。";
-        });
-
-        // ギフト受信時の処理
-        connection.on('gift', data => {
-            log.innerText = `受信ログ: ${data.giftName} x${data.repeatCount}`;
-            
-            // 判定ロジック（名前の揺れに対応）
-            const setting = giftSettings.find(s => {
-                const incoming = data.giftName.toLowerCase();
-                const stored = s.name.toLowerCase();
-                return incoming.includes(stored) || stored.includes(incoming);
-            });
-
-            if(setting) {
-                const addDist = (setting.val * setting.mult) * data.repeatCount;
-                totalMeters += addDist;
-                updateUI();
-            }
-        });
-    }
-
-    // 切断処理
-    function disconnectTikTok() {
-        if(connection) connection.disconnect();
-        document.getElementById('mainCard').classList.remove('active');
-        document.getElementById('statusTxt').innerText = "オフライン";
-        document.getElementById('btnConnect').style.display = "block";
-        document.getElementById('btnDisconnect').style.display = "none";
-        document.getElementById('log').innerText = "切断されました。";
-    }
-
-    // 設定の保存
-    function saveSetting() {
-        const name = document.getElementById('newName').value.trim();
-        const val = document.getElementById('newVal').value;
-        const mult = document.getElementById('newUnit').value;
-        if(name && val) {
-            giftSettings.push({ name, val: parseFloat(val), mult: parseInt(mult) });
-            updateUI();
-            document.getElementById('newName').value = "";
-            document.getElementById('newVal').value = "";
-        }
-    }
-
-    function deleteSetting(i) { giftSettings.splice(i, 1); updateUI(); }
-    function resetData() { if(confirm("距離と累計データをリセットしてもよろしいですか？")) { totalMeters = 0; updateUI(); } }
-
-    // 初期表示
-    updateUI();
-</script>
-</body>
-</html>
-<body>
-
-<div class="container">
-    <div class="status-card" id="mainCard">
-        <div class="status-text"><span class="indicator"></span><span id="statusTxt">オフライン</span></div>
-        <div id="targetUser" style="color:#888; margin-bottom:10px;">接続先: 未指定</div>
-        <div class="dist-display" id="totalDist">0 m</div>
-        <div style="color: #666; font-size: 0.9rem;">累計: <span id="totalM">0</span>m</div>
-    </div>
-
-    <div class="card">
-        <input type="text" id="tiktokId" placeholder="TikTok ID (@なし)">
-        <button class="btn btn-connect" id="btnConnect" onclick="connectTikTok()">自動計測を開始する</button>
-        <button class="btn btn-disconnect" id="btnDisconnect" onclick="disconnectTikTok()">接続を解除</button>
-        <div class="log-area" id="log">ログ: 待機中...</div>
-    </div>
-
-    <div class="card">
-        <strong style="display:block; margin-bottom:10px;">🎁 判定ギフトの登録</strong>
-        <div style="display:flex; gap:5px; margin-bottom:10px;">
-            <input type="text" id="newName" placeholder="名前" style="flex:2">
-            <input type="number" id="newVal" placeholder="距離" style="flex:1">
-            <select id="newUnit" style="flex:1"><option value="1">m</option><option value="1000">km</option></select>
-        </div>
-        <button class="btn" style="background:var(--online); color:#000;" onclick="saveSetting()">設定を追加</button>
-        <div id="giftListDisplay" style="margin-top:20px;"></div>
-    </div>
-
-    <button onclick="resetData()" style="background:none; border:none; color:#555; text-decoration:underline; width:100%; margin-top:20px;">全データをリセット</button>
-</div>
-
-<script>
-    let giftSettings = JSON.parse(localStorage.getItem('tk_pro_settings')) || [];
-    let totalMeters = parseFloat(localStorage.getItem('tk_pro_total')) || 0;
-    let connection = null;
-
-    function updateUI() {
-        const isKm = Math.abs(totalMeters) >= 1000;
-        document.getElementById('totalDist').innerText = isKm ? (totalMeters/1000).toFixed(2) + " km" : Math.round(totalMeters) + " m";
-        document.getElementById('totalM').innerText = Math.round(totalMeters).toLocaleString();
-        
-        const listDiv = document.getElementById('giftListDisplay');
-        listDiv.innerHTML = "";
-        giftSettings.forEach((g, i) => {
-            const unit = g.mult == 1000 ? "km" : "m";
-            listDiv.innerHTML += `<div class="gift-item">
-                <span><strong>${g.name}</strong>: ${g.val > 0 ? '+'+g.val : g.val}${unit}</span>
-                <button style="background:#ff4d4d; color:white; border:none; padding:5px 10px; border-radius:5px;" onclick="deleteSetting(${i})">削除</button>
+            list.innerHTML += `<div class="gift-item">
+                <span>${g.name} (${g.val}${g.mult==1000?'km':'m'})</span>
+                <button class="btn-del" onclick="deleteGift(${i})">削除</button>
             </div>`;
         });
-        localStorage.setItem('tk_pro_settings', JSON.stringify(giftSettings));
-        localStorage.setItem('tk_pro_total', totalMeters);
+
+        // ローカルストレージに保存
+        localStorage.setItem('manual_dist', currentDistance);
+        localStorage.setItem('manual_settings', JSON.stringify(giftSettings));
+        localStorage.setItem('manual_history', JSON.stringify(history));
     }
 
-    function connectTikTok() {
-        const user = document.getElementById('tiktokId').value.trim();
-        if(!user) return alert("IDを入力してください");
-
-        const card = document.getElementById('mainCard');
-        const statusTxt = document.getElementById('statusTxt');
-        const log = document.getElementById('log');
-
-        statusTxt.innerText = "接続中...";
-        log.innerText = "TikTok LIVEへ接続を試みています...";
-
-        connection = new TikTokLiveConnector.TikTokLiveConnection(user);
-
-        connection.connect().then(() => {
-            card.classList.add('active');
-            statusTxt.innerText = "LIVE監視中";
-            document.getElementById('targetUser').innerText = "接続先: @" + user;
-            document.getElementById('btnConnect').style.display = "none";
-            document.getElementById('btnDisconnect').style.display = "block";
-            log.innerText = "接続完了！ギフトを待機しています。";
-        }).catch(err => {
-            alert("接続できませんでした。ライブ中であることを確認してください。");
-            statusTxt.innerText = "接続失敗";
-        });
-
-        connection.on('gift', data => {
-            log.innerText = `受信中: ${data.giftName} x${data.repeatCount}`;
-            // 曖昧判定（ひらがなカタカナ・部分一致）
-            const setting = giftSettings.find(s => data.giftName.includes(s.name) || s.name.includes(data.giftName));
-            if(setting) {
-                totalMeters += (setting.val * setting.mult) * data.repeatCount;
-                updateUI();
-            }
-        });
+    // 距離加算
+    function addDistance(amount) {
+        currentDistance += amount;
+        // 新しい操作があったら、現在のステップより先の履歴は削除して追加
+        history = history.slice(0, historyStep + 1);
+        history.push(currentDistance);
+        // 履歴が長すぎないように（直近50件）
+        if (history.length > 50) history.shift();
+        historyStep = history.length - 1;
+        updateUI();
     }
 
-    function disconnectTikTok() {
-        if(connection) connection.disconnect();
-        document.getElementById('mainCard').classList.remove('active');
-        document.getElementById('statusTxt').innerText = "オフライン";
-        document.getElementById('btnConnect').style.display = "block";
-        document.getElementById('btnDisconnect').style.display = "none";
-        document.getElementById('log').innerText = "切断されました。";
-    }
-
-    function saveSetting() {
-        const n = document.getElementById('newName').value;
-        const v = document.getElementById('newVal').value;
-        const m = document.getElementById('newUnit').value;
-        if(n && v) {
-            giftSettings.push({ name: n, val: parseFloat(v), mult: parseInt(m) });
+    // 戻る
+    function undo() {
+        if (historyStep > 0) {
+            historyStep--;
+            currentDistance = history[historyStep];
             updateUI();
-            document.getElementById('newName').value = "";
-            document.getElementById('newVal').value = "";
         }
     }
 
-    function deleteSetting(i) { giftSettings.splice(i, 1); updateUI(); }
-    function resetData() { if(confirm("全データを消去しますか？")) { totalMeters = 0; updateUI(); } }
+    // 進む
+    function redo() {
+        if (historyStep < history.length - 1) {
+            historyStep++;
+            currentDistance = history[historyStep];
+            updateUI();
+        }
+    }
+
+    // 設定追加
+    function addGiftSetting() {
+        const name = document.getElementById('gName').value.trim();
+        const val = parseFloat(document.getElementById('gVal').value);
+        const mult = parseInt(document.getElementById('gUnit').value);
+        if (name && !isNaN(val)) {
+            giftSettings.push({ name, val, mult });
+            updateUI();
+            document.getElementById('gName').value = "";
+            document.getElementById('gVal').value = "";
+        }
+    }
+
+    // 削除
+    function deleteGift(i) {
+        giftSettings.splice(i, 1);
+        updateUI();
+    }
+
+    // リセット
+    function hardReset() {
+        if (confirm("距離を0に戻しますか？（ギフト設定は消えません）")) {
+            currentDistance = 0;
+            history = [0];
+            historyStep = 0;
+            updateUI();
+        }
+    }
+
+    // 初期化
     updateUI();
 </script>
 </body>
