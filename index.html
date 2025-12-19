@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok自動距離計算 - 高視認性版</title>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.4/dist/socket.io.min.js"></script>
+    <script src="https://unpkg.com/bubbles-tiktok-connector@1.0.0/dist/bubbles-tiktok-connector.min.js"></script>
+    <style>
+        :root { --primary: #fe2c55; --online: #25f4ee; --offline: #555; --bg: #0f0f0f; }
+        body { font-family: sans-serif; background: var(--bg); color: white; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 450px; }
+        
+        /* 接続状態カード */
+        .status-card { background: #1a1a1a; border-radius: 20px; padding: 25px; text-align: center; border: 2px solid var(--offline); transition: 0.3s; margin-bottom: 15px; }
+        .status-card.active { border-color: var(--online); box-shadow: 0 0 20px rgba(37, 244, 238, 0.3); }
+        
+        /* 接続中ランプ */
+        .indicator { width: 15px; height: 15px; background: var(--offline); border-radius: 50%; display: inline-block; margin-right: 10px; }
+        .active .indicator { background: var(--online); box-shadow: 0 0 10px var(--online); animation: blink 1.5s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .status-text { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; }
+        .dist-display { font-size: 4rem; font-weight: bold; color: var(--primary); margin: 15px 0; letter-spacing: -2px; }
+        
+        /* 入力エリア */
+        .card { background: #222; border-radius: 15px; padding: 20px; margin-bottom: 15px; border: 1px solid #333; }
+        input, select { background: #333; border: 1px solid #444; color: white; padding: 12px; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 1rem; }
+        .btn { cursor: pointer; border: none; border-radius: 8px; padding: 15px; font-weight: bold; width: 100%; transition: 0.2s; font-size: 1.1rem; }
+        .btn-connect { background: var(--primary); color: white; margin-top: 10px; }
+        .btn-disconnect { background: #444; color: white; margin-top: 10px; display: none; }
+        
+        .gift-item { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 12px; border-radius: 10px; margin-bottom: 8px; border-left: 5px solid var(--online); }
+        .log-area { background: #000; padding: 10px; border-radius: 10px; font-size: 0.8rem; color: #aaa; height: 50px; overflow-y: auto; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="status-card" id="mainCard">
+        <div class="status-text"><span class="indicator"></span><span id="statusTxt">オフライン</span></div>
+        <div id="targetUser" style="color:#888; margin-bottom:10px;">接続先: 未指定</div>
+        <div class="dist-display" id="totalDist">0 m</div>
+        <div style="color: #666; font-size: 0.9rem;">累計: <span id="totalM">0</span>m</div>
+    </div>
+
+    <div class="card">
+        <input type="text" id="tiktokId" placeholder="TikTok ID (@なし)">
+        <button class="btn btn-connect" id="btnConnect" onclick="connectTikTok()">自動計測を開始する</button>
+        <button class="btn btn-disconnect" id="btnDisconnect" onclick="disconnectTikTok()">接続を解除</button>
+        <div class="log-area" id="log">ログ: 待機中...</div>
+    </div>
+
+    <div class="card">
+        <strong style="display:block; margin-bottom:10px;">🎁 判定ギフトの登録</strong>
+        <div style="display:flex; gap:5px; margin-bottom:10px;">
+            <input type="text" id="newName" placeholder="名前" style="flex:2">
+            <input type="number" id="newVal" placeholder="距離" style="flex:1">
+            <select id="newUnit" style="flex:1"><option value="1">m</option><option value="1000">km</option></select>
+        </div>
+        <button class="btn" style="background:var(--online); color:#000;" onclick="saveSetting()">設定を追加</button>
+        <div id="giftListDisplay" style="margin-top:20px;"></div>
+    </div>
+
+    <button onclick="resetData()" style="background:none; border:none; color:#555; text-decoration:underline; width:100%; margin-top:20px;">全データをリセット</button>
+</div>
+
+<script>
+    let giftSettings = JSON.parse(localStorage.getItem('tk_pro_settings')) || [];
+    let totalMeters = parseFloat(localStorage.getItem('tk_pro_total')) || 0;
+    let connection = null;
+
+    function updateUI() {
+        const isKm = Math.abs(totalMeters) >= 1000;
+        document.getElementById('totalDist').innerText = isKm ? (totalMeters/1000).toFixed(2) + " km" : Math.round(totalMeters) + " m";
+        document.getElementById('totalM').innerText = Math.round(totalMeters).toLocaleString();
+        
+        const listDiv = document.getElementById('giftListDisplay');
+        listDiv.innerHTML = "";
+        giftSettings.forEach((g, i) => {
+            const unit = g.mult == 1000 ? "km" : "m";
+            listDiv.innerHTML += `<div class="gift-item">
+                <span><strong>${g.name}</strong>: ${g.val > 0 ? '+'+g.val : g.val}${unit}</span>
+                <button style="background:#ff4d4d; color:white; border:none; padding:5px 10px; border-radius:5px;" onclick="deleteSetting(${i})">削除</button>
+            </div>`;
+        });
+        localStorage.setItem('tk_pro_settings', JSON.stringify(giftSettings));
+        localStorage.setItem('tk_pro_total', totalMeters);
+    }
+
+    function connectTikTok() {
+        const user = document.getElementById('tiktokId').value.trim();
+        if(!user) return alert("IDを入力してください");
+
+        const card = document.getElementById('mainCard');
+        const statusTxt = document.getElementById('statusTxt');
+        const log = document.getElementById('log');
+
+        statusTxt.innerText = "接続中...";
+        log.innerText = "TikTok LIVEへ接続を試みています...";
+
+        connection = new TikTokLiveConnector.TikTokLiveConnection(user);
+
+        connection.connect().then(() => {
+            card.classList.add('active');
+            statusTxt.innerText = "LIVE監視中";
+            document.getElementById('targetUser').innerText = "接続先: @" + user;
+            document.getElementById('btnConnect').style.display = "none";
+            document.getElementById('btnDisconnect').style.display = "block";
+            log.innerText = "接続完了！ギフトを待機しています。";
+        }).catch(err => {
+            alert("接続できませんでした。ライブ中であることを確認してください。");
+            statusTxt.innerText = "接続失敗";
+        });
+
+        connection.on('gift', data => {
+            log.innerText = `受信中: ${data.giftName} x${data.repeatCount}`;
+            // 曖昧判定（ひらがなカタカナ・部分一致）
+            const setting = giftSettings.find(s => data.giftName.includes(s.name) || s.name.includes(data.giftName));
+            if(setting) {
+                totalMeters += (setting.val * setting.mult) * data.repeatCount;
+                updateUI();
+            }
+        });
+    }
+
+    function disconnectTikTok() {
+        if(connection) connection.disconnect();
+        document.getElementById('mainCard').classList.remove('active');
+        document.getElementById('statusTxt').innerText = "オフライン";
+        document.getElementById('btnConnect').style.display = "block";
+        document.getElementById('btnDisconnect').style.display = "none";
+        document.getElementById('log').innerText = "切断されました。";
+    }
+
+    function saveSetting() {
+        const n = document.getElementById('newName').value;
+        const v = document.getElementById('newVal').value;
+        const m = document.getElementById('newUnit').value;
+        if(n && v) {
+            giftSettings.push({ name: n, val: parseFloat(v), mult: parseInt(m) });
+            updateUI();
+            document.getElementById('newName').value = "";
+            document.getElementById('newVal').value = "";
+        }
+    }
+
+    function deleteSetting(i) { giftSettings.splice(i, 1); updateUI(); }
+    function resetData() { if(confirm("全データを消去しますか？")) { totalMeters = 0; updateUI(); } }
+    updateUI();
+</script>
+</body>
+</html>
